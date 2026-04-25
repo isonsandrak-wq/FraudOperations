@@ -1,0 +1,48 @@
+-- FRAUD LOSS INSIGHTS BY WEEK AND FRAUD TYPE
+-- Purpose: Track weekly fraud losses by fraud type, show share of total, and compare against weekly average.
+-- Business value: Helps fraud leaders identify which fraud types are spiking, allocate resources, and measure strategy effectiveness.
+
+SELECT 
+    -- Convert the first fraud date to the start of its week (Monday). All weekly comparisons use the same anchor.
+    CAST(DATE_TRUNC('week', Date_Of_First_Fraud) AS DATE) AS week_start,
+
+    -- Human-readable fraud type labels. 'Fraud_Type' column uses codes; this CASE maps them to standard industry terms.
+    CASE 
+        WHEN Fraud_Type = '01' THEN 'Identity Theft'
+        WHEN Fraud_Type = '02' THEN 'Synthetic Identity'
+        WHEN Fraud_Type = '03' THEN 'Account Takeover'
+        WHEN Fraud_Type = '04' THEN 'First‑Party Fraud'
+        WHEN Fraud_Type = '06' THEN 'Card Not Received'
+        WHEN Fraud_Type = '07' THEN 'Counterfeit'
+        WHEN Fraud_Type = '08' THEN 'Lost/Stolen Card'
+        ELSE 'Other'
+    END AS fraud_type_label,
+
+    -- Total loss amount for this specific fraud type within the week. Rounded to cents.
+    ROUND(SUM(Loss_Amount), 2) AS total_loss_this_week_by_type,
+
+    -- Window function: total loss for all fraud types combined in the same week.
+    -- Partitioned by week_start (same as grouping) but not by fraud type, so it repeats for each row in the week.
+    ROUND(SUM(SUM(Loss_Amount)) OVER (PARTITION BY DATE_TRUNC('week', Date_Of_First_Fraud)), 2) AS total_loss_this_week_all_types,
+
+    -- Percentage that this fraud type contributed to the week's total loss.
+    -- Helps identify which fraud types are driving losses each week.
+    ROUND(100.0 * SUM(Loss_Amount) / SUM(SUM(Loss_Amount)) OVER (PARTITION BY DATE_TRUNC('week', Date_Of_First_Fraud)), 1) AS percentage_of_week_total,
+
+    -- Average loss per fraud type within the week. Uses window function to show, for each row, the average loss across all types in that week.
+    -- Significant for comparison: a type with loss far above the weekly average may need immediate attention.
+    ROUND(AVG(SUM(Loss_Amount)) OVER (PARTITION BY DATE_TRUNC('week', Date_Of_First_Fraud)), 0) AS avg_loss_per_type_this_week
+
+FROM default.fraud_losses_fraud_stats
+
+-- Only consider cases that have been fully investigated and closed (no pending or open cases).
+-- Exclude null loss amounts to avoid distorting aggregates.
+WHERE Case_Status = 'Closed' 
+  AND Loss_Amount IS NOT NULL
+
+-- Group by week and fraud type to get one row per fraud type per week.
+GROUP BY DATE_TRUNC('week', Date_Of_First_Fraud), Fraud_Type
+
+-- Order results by week (newest first? actually ASC gives oldest first, but typical report wants recent weeks on top).
+-- For a typical executive report, you would use `ORDER BY week_start DESC`. Here we keep ASC to show progression, but with losses descending within each week.
+ORDER BY week_start, total_loss_this_week_by_type DESC;
