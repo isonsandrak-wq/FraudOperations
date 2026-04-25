@@ -1,0 +1,48 @@
+-- Step 1: Count how many cases each investigator closes per day
+-- Significance: Converts raw case data into daily productivity metrics per investigator.
+-- This is the foundation for comparing individual workload and efficiency over time.
+WITH daily_closed_counts AS (
+    SELECT 
+        Investigator_ID,                                    -- Which investigator closed the case
+        DATE(Date_Of_Result) AS closed_date,               -- The day the case was finalized (no time part)
+        COUNT(*) AS cases_closed_that_day                  -- Number of cases closed by that investigator on that day
+    FROM default.fraud_losses_fraud_stats
+    WHERE Case_Status = 'Closed'                           -- Only closed cases have a final resolution date
+      AND Investigator_ID IS NOT NULL                      -- Exclude missing investigator assignments
+    GROUP BY Investigator_ID, DATE(Date_Of_Result)         -- One row per investigator per day they closed at least one case
+),
+
+-- Step 2: Calculate each investigator's personal average cases per day (over their active days)
+-- Significance: Provides a personalized benchmark. An investigator who typically closes 5 cases/day
+-- will have a higher baseline than one who closes 2 cases/day. Useful for fair performance reviews.
+investigator_avg AS (
+    SELECT 
+        Investigator_ID,
+        AVG(cases_closed_that_day) AS investigator_avg_cases_per_day   -- Average of their daily case counts
+    FROM daily_closed_counts
+    GROUP BY Investigator_ID
+),
+
+-- Step 3: Calculate the overall average cases per day across all investigators and all active days
+-- Significance: Gives a team-level benchmark. This is the "typical" daily productivity for any investigator.
+-- Helps identify if an individual is above or below the team average.
+overall_avg AS (
+    SELECT AVG(cases_closed_that_day) AS overall_avg_cases_per_day
+    FROM daily_closed_counts
+)
+
+-- Final: Show each day, each investigator, their daily count, personal average, and overall average
+-- Significance: This generates a detailed performance report that can be used to:
+--   - Identify investigators who consistently perform above/below team average
+--   - Spot productivity dips or spikes on specific dates
+--   - Compare an investigator against their own history (personal avg)
+SELECT 
+    d.closed_date AS date,                                 -- The day (e.g., 2026-04-08)
+    d.Investigator_ID,                                     -- Who closed the cases
+    d.cases_closed_that_day,                               -- How many they closed that day
+    ROUND(i.investigator_avg_cases_per_day, 2) AS investigator_daily_avg,  -- Their personal average (over their active days)
+    ROUND(o.overall_avg_cases_per_day, 2) AS overall_daily_avg              -- Team average (across all investigators)
+FROM daily_closed_counts d
+JOIN investigator_avg i ON d.Investigator_ID = i.Investigator_ID           -- Attach personal avg to each daily row
+CROSS JOIN overall_avg o                                                   -- Attach the single team average to every row
+ORDER BY d.closed_date, d.Investigator_ID;                                 -- Chronological order, then by investigator
