@@ -1,5 +1,5 @@
 -- Step 1: Count how many cases each investigator closes per day
--- Significance: Converts raw case data into daily productivity metrics per investigator.
+-- Significance: Converts raw case data into daily productivity metrics per each investigator.
 -- This is the foundation for comparing individual workload and efficiency over time.
 WITH daily_closed_counts AS (
     SELECT 
