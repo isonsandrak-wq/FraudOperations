@@ -76,3 +76,4 @@ Fraud patterns shift quickly. A sudden increase in a single fraud type (e.g., AT
 
 
 *These queries were developed for use during my SQL Saturdays classes and work in Databricks SQL Spark.*
+*All data, tables, SQL examples, and fraud scenarios in this repository are entirely fictional and created solely for educational and training purposes. No real customer information, personal data, trade secrets, or intellectual property has been used or derived from any actual organization. Any resemblance to real persons, businesses, events, or financial data is purely coincidental. This content is intended to teach SQL and fraud detection concepts and should not be used for real‑world financial decisions without proper validation.
